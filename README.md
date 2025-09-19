@@ -4,5 +4,7 @@ A universal installer for linux to automate requirements packages
 
 https://user-images.githubusercontent.com/43219706/216514768-3c349e9e-57fb-4d41-8e31-fbc94969ecd5.mp4
 
+<a href="https://www.buymeacoffee.com/diatasso" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Book" style="height: 40px !important;width: 145px !important;" ></a>
+
 ## [The code is here for now](https://gist.github.com/shadowdevnotreal/a865989fcdde42705e429607e881cd36)
 
