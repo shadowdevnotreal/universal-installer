@@ -1,0 +1,33 @@
+This script will check if the package manager apt-get, yum, or dnf is installed. It will then update the package lists and install the required modules python3-secrets, python3-time, python3-pyotp, python3-hashlib, python3-logging, and python3-crypto. It will also check for errors at each step and exit with an error message if any step fails.
+
+
+
+====================================================================================
+====================================================================================
+=====================================================================================
+
+if I want to only modify the main python script to call upon this bash script at the start, how would I do that?
+
+
+To call the bash script from within your Python script, you can use the subprocess module. Here's an example of how you can call the bash script at the start of your Python script:
+
+import subprocess
+
+# Call the bash script
+subprocess.run(["bash", "path/to/your/bash_script.sh"])
+
+# Rest of your Python code
+
+This will run the bash script using the subprocess.run() function, which will execute the script and wait for it to complete before proceeding with the rest of the Python code. This can be useful if you want to ensure that all the dependencies are installed and ready to use before your Python script starts.
+
+===============================================
+
+You may also want to check the return code of the subprocess call to check if there are any errors by using the subprocess.run(...).returncode
+
+result = subprocess.run(["bash", "path/to/your/bash_script.sh"])
+if result.returncode != 0:
+    print("Error: Failed to run the dependency script.")
+    exit(1)
+
+
+It will check if the return code of the script is not equal to 0, if that is the case, it will print an error message and exit the script with a status code of 1.

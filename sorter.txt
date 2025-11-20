@@ -1,0 +1,17 @@
+what is I wanted to add a command for the failed packages and try to install then with
+pip install -r
+
+how can i take all the install log files, combine them into one, then run the pip install -r?
+
+Here are the steps you can follow to combine all install log files into one and then run the pip install -r command:
+
+Locate all the install log files.
+Use the cat command to combine the contents of all log files into a single file. For example: cat file1.log file2.log > combined_log.txt
+Use the grep command to filter out only the lines that contain the Failed to install message. For example: `grep "Failed to
+
+sort apps.txt | uniq > apps1.txt
+
+cat install_logs/update_log_* > combined_log.txt
+sed 's/Error: Failed to install //g' combined_log.txt > cleaned_log.txt
+sort -u cleaned_log.txt | awk '{gsub(/[<>=~].*$/, "", $0); print $0}' | sort -u > clean_log_final.txt
+pip install --ignore-installed --no-deps -r clean_log_final.txt
