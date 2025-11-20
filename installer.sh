@@ -1,5 +1,139 @@
 #!/usr/bin/env bash
 
+# ============================================================================
+# Function Declarations
+# ============================================================================
+
+# Check if a command exists
+command_exists() {
+  command -v "$1" > /dev/null 2>&1
+}
+
+# Detect available package manager
+detect_package_manager() {
+  if command_exists apt-get; then
+    echo "apt-get"
+  elif command_exists yum; then
+    echo "yum"
+  elif command_exists dnf; then
+    echo "dnf"
+  else
+    echo ""
+  fi
+}
+
+# Update package lists for a given package manager
+update_packages() {
+  local pm="$1"
+  echo "Updating package lists"
+  case "$pm" in
+    apt-get)
+      sudo apt-get update || return 1
+      ;;
+    yum)
+      sudo yum update || return 1
+      ;;
+    dnf)
+      sudo dnf update || return 1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Install a single package using the specified package manager
+install_package() {
+  local pm="$1"
+  local package="$2"
+
+  echo "Installing $package"
+  case "$pm" in
+    apt-get)
+      sudo apt-get install -y "$package"
+      ;;
+    yum)
+      sudo yum install -y "$package"
+      ;;
+    dnf)
+      sudo dnf install -y "$package"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Ensure a dependency is installed, install if missing
+ensure_dependency() {
+  local dep_name="$1"
+
+  if command_exists "$dep_name"; then
+    echo "$dep_name already installed"
+    return 0
+  fi
+
+  echo "$dep_name is not installed, installing now"
+  local pm
+  pm=$(detect_package_manager)
+
+  if [ -z "$pm" ]; then
+    echo "Error: Could not find a package manager. Please install $dep_name manually."
+    exit 1
+  fi
+
+  update_packages "$pm" || { echo "Error: Failed to update package lists" ; exit 1; }
+  install_package "$pm" "$dep_name" || { echo "Error: Failed to install $dep_name" ; exit 1; }
+}
+
+# Validate package name (alphanumeric, hyphens, underscores, dots only)
+validate_package_name() {
+  local package="$1"
+
+  # Check if empty
+  if [ -z "$package" ]; then
+    return 1
+  fi
+
+  # Check for valid characters (alphanumeric, hyphen, underscore, dot, plus)
+  if [[ ! "$package" =~ ^[a-zA-Z0-9._+-]+$ ]]; then
+    echo "Warning: Invalid package name '$package' - contains illegal characters"
+    return 1
+  fi
+
+  return 0
+}
+
+# Install a program with error logging
+install_program() {
+  local pm="$1"
+  local program="$2"
+  local log_file="update_log_$(date +%F_%T).log"
+
+  # Validate package name to prevent command injection
+  if ! validate_package_name "$program"; then
+    echo "Skipping invalid package name: $program"
+    return 1
+  fi
+
+  # Check if the program is already installed
+  if command_exists "$program"; then
+    echo "$program already installed"
+    return 0
+  fi
+
+  echo "Installing $program"
+
+  # Update package lists (log errors but don't exit)
+  update_packages "$pm" || echo "Error: Failed to update package lists" >> "$log_file"
+
+  # Install the program (log errors but don't exit)
+  install_package "$pm" "$program" || echo "Error: Failed to install $program" >> "$log_file"
+}
+
+# ============================================================================
+# Main Script
+# ============================================================================
 
 echo -e "\033[1;31m_  _ _  _ _ _  _ ____ ____ ____ ____ _       _ _  _ ____ ___ ____ _    _    ____ ____\033[0m"
 echo -e "\033[1;31m|  | |\ | | |  | |___ |__/ [__  |__| |       | |\ | [__   |  |__| |    |    |___ |__/\033[0m"
@@ -44,6 +178,7 @@ if [ "$EUID" -ne 0 ]; then
     sudo -v
     if [ "$?" -ne 0 ]; then
         echo "Error: Superuser credentials not accepted."
+        exit 1
     else
         # If the credentials are accepted, run the code as superuser
         sudo "$0" "$@"
@@ -51,69 +186,16 @@ if [ "$EUID" -ne 0 ]; then
     fi
 fi
 
-mkdir -p install_logs
+# Create logs directory with error checking
+mkdir -p install_logs || { echo "Error: Failed to create logs directory"; exit 1; }
 
-# Check if python3 is installed
-if command -v python3 > /dev/null 2>&1; then
-    echo "Python3 already installed"
-else
-    echo "Python3 is not installed, installing now"
-    if command -v apt-get > /dev/null 2>&1; then
-        echo "Updating package lists"
-        sudo apt-get update || { echo "Error: Failed to update package lists" ; exit 1; }
-        echo "Installing python3"
-        sudo apt-get install -y python3 || { echo "Error: Failed to install python3" ; exit 1; }
-    elif command -v yum > /dev/null 2>&1; then
-        echo "Updating package lists"
-        sudo yum update || { echo "Error: Failed to update package lists" ; exit 1; }
-        echo "Installing python3"
-        sudo yum install -y python3 || { echo "Error: Failed to install python3" ; exit 1; }
-    elif command -v dnf > /dev/null 2>&1; then
-        echo "Updating package lists"
-        sudo dnf update || { echo "Error: Failed to update package lists" ; exit 1; }
-        echo "Installing python3"
-        sudo dnf install -y python3 || { echo "Error: Failed to install python3" ; exit 1; }
-    else
-        echo "Error: Could not find a package manager. Please install python3 manually."
-        exit 1
-    fi
-fi
+# Ensure required dependencies are installed
+ensure_dependency "python3"
+ensure_dependency "zenity"
 
-# Check if zenity is installed
-if command -v zenity > /dev/null 2>&1; then
-    echo "zenity already installed"
-else
-    echo "zenity is not installed, installing now"
-    if command -v apt-get > /dev/null 2>&1; then
-        echo "Updating package lists"
-        sudo apt-get update || { echo "Error: Failed to update package lists" ; exit 1; }
-        echo "Installing zenity"
-        sudo apt-get install -y zenity || { echo "Error: Failed to install zenity" ; exit 1; }
-    elif command -v yum > /dev/null 2>&1; then
-        echo "Updating package lists"
-        sudo yum update || { echo "Error: Failed to update package lists" ; exit 1; }
-        echo "Installing zenity"
-        sudo yum install -y zenity || { echo "Error: Failed to install zenity" ; exit 1; }
-    elif command -v dnf > /dev/null 2>&1; then
-        echo "Updating package lists"
-        sudo dnf update || { echo "Error: Failed to update package lists" ; exit 1; }
-        echo "Installing zenity"
-        sudo dnf install -y zenity || { echo "Error: Failed to install zenity" ; exit 1; }
-    else
-        echo "Error: Could not find a package manager. Please install zenity manually."
-        exit 1
-    fi
-fi
-
-# Check for package managers
-pm=""
-if command -v apt-get > /dev/null; then
-    pm="apt-get"
-elif command -v yum > /dev/null; then
-    pm="yum"
-elif command -v dnf > /dev/null; then
-    pm="dnf"
-else
+# Detect package manager
+pm=$(detect_package_manager)
+if [ -z "$pm" ]; then
     echo "No package manager was found. Please install either apt-get, yum or dnf and try again."
     exit 1
 fi
@@ -123,48 +205,31 @@ options=$(zenity --list --title="Input Method" --text="How would you like to spe
     TRUE "Input via typing" \
     FALSE "Select a file")
 
+# Check if user cancelled the dialog
+if [ -z "$options" ]; then
+  echo "Operation cancelled by user"
+  exit 0
+fi
+
 if [ "$options" = "Input via typing" ]; then
   # Ask the user to enter the programs they need to install
   programs=$(zenity --entry --title="Input Programs" --text="Enter the programs you would like to install, separated by a space:" --width=500)
 
-  # Split the input into an array and install the programs
-IFS=' ' read -ra programs_array <<< "$programs"
-for program in "${programs_array[@]}"; do
-  # Check if the program is installed
-  if command -v "$program" > /dev/null 2>&1; then
-    echo "$program already installed"
-  else
-    echo "Installing $program"
-    # Check if apt-get is installed
-    if command -v apt-get > /dev/null 2>&1; then
-      # Update package lists
-      echo "Updating package lists"
-      sudo apt-get update || (echo "Error: Failed to update package lists" >> "update_log_$(date +%F_%T).log")
-      # Install the program
-      echo "Installing $program"
-      sudo apt-get install -y "$program" || (echo "Error: Failed to install $program" >> "update_log_$(date +%F_%T).log")
-    # Check if yum is installed
-    elif command -v yum > /dev/null 2>&1; then
-      # Update package lists
-      echo "Updating package lists"
-      sudo yum update || (echo "Error: Failed to update package lists" >> "update_log_$(date +%F_%T).log")
-      # Install the program
-      echo "Installing $program"
-      sudo yum install -y "$program" || (echo "Error: Failed to install $program" >> "update_log_$(date +%F_%T).log")
-    # Check if dnf is installed
-    elif command -v dnf > /dev/null 2>&1; then
-      # Update package lists
-      echo "Updating package lists"
-      sudo dnf update || (echo "Error: Failed to update package lists" >> "update_log_$(date +%F_%T).log")
-      # Install the program
-      echo "Installing $program"
-      sudo dnf install -y "$program" || (echo "Error: Failed to install $program" >> "update_log_$(date +%F_%T).log")
-    else
-      echo "Error: Could not find a package manager. Please install $program manually."
-      exit 1
-    fi
+  # Check if user cancelled or entered nothing
+  if [ -z "$programs" ]; then
+    echo "No programs specified, exiting"
+    exit 0
   fi
-done
+
+  # Split the input into an array and install the programs
+  # Save and restore IFS to avoid side effects
+  local OLD_IFS="$IFS"
+  IFS=' ' read -ra programs_array <<< "$programs"
+  IFS="$OLD_IFS"
+
+  for program in "${programs_array[@]}"; do
+    install_program "$pm" "$program"
+  done
 
 elif [ "$options" = "Select a file" ]; then
   # Open file explorer to select the file
@@ -177,47 +242,32 @@ elif [ "$options" = "Select a file" ]; then
   fi
 
   # Read the file and install the programs
-while read -r line; do
-  program="$line"
-  # Check if the program is installed
-    if command -v "$program" > /dev/null 2>&1; then
-    echo "$program already installed"
-  else
-    echo "Installing $program"
-    # Check if apt-get is installed
-    if command -v apt-get > /dev/null 2>&1; then
-      # Update package lists
-      echo "Updating package lists"
-      sudo apt-get update || (echo "Error: Failed to update package lists" >> "update_log_$(date +%F_%T).log")
-      # Install the program
-      echo "Installing $program"
-      sudo apt-get install -y "$program" || (echo "Error: Failed to install $program" >> "update_log_$(date +%F_%T).log")
-    # Check if yum is installed
-    elif command -v yum > /dev/null 2>&1; then
-      # Update package lists
-      echo "Updating package lists"
-      sudo yum update || (echo "Error: Failed to update package lists" >> "update_log_$(date +%F_%T).log")
-      # Install the program
-      echo "Installing $program"
-      sudo yum install -y "$program" || (echo "Error: Failed to install $program" >> "update_log_$(date +%F_%T).log")
-    # Check if dnf is installed
-    elif command -v dnf > /dev/null 2>&1; then
-      # Update package lists
-      echo "Updating package lists"
-      sudo dnf update || (echo "Error: Failed to update package lists" >> "update_log_$(date +%F_%T).log")
-      # Install the program
-      echo "Installing $program"
-      sudo dnf install -y "$program" || (echo "Error: Failed to install $program" >> "update_log_$(date +%F_%T).log")
-    else
-      echo "Error: Could not find a package manager. Please install $program manually."
-      exit 1
-    fi
-  fi
-done < "$file"
+  while read -r program; do
+    install_program "$pm" "$program"
+  done < "$file"
 fi
 
-mkdir -p install_logs
-mv update_log_* install_logs/
+# Move log files to logs directory and rotate old logs (keep only last 50 files)
+mv update_log_* install_logs/ 2>/dev/null || true
+
+# Log rotation: remove old logs if more than 50 files exist
+log_count=$(find install_logs/ -name "update_log_*" 2>/dev/null | wc -l)
+if [ "$log_count" -gt 50 ]; then
+  echo "Rotating old log files..."
+  find install_logs/ -name "update_log_*" -type f | sort | head -n -50 | xargs rm -f 2>/dev/null || true
+fi
+
+# Try to install failed packages using pip as fallback
+if [ -f install_logs/update_log_* ]; then
+  cat install_logs/update_log_* > combined_log.txt 2>/dev/null || true
+  sed 's/Error: Failed to install //g' combined_log.txt > cleaned_log.txt 2>/dev/null || true
+  sort -u cleaned_log.txt | awk '{gsub(/[<>=~].*$/, "", $0); print $0}' | sort -u > clean_log_final.txt
+  if [ -s clean_log_final.txt ]; then
+    echo "Attempting to install failed packages using pip..."
+    pip install --ignore-installed --no-deps -r clean_log_final.txt 2>/dev/null || echo "Some packages could not be installed via pip"
+    rm -f combined_log.txt cleaned_log.txt clean_log_final.txt
+  fi
+fi
 
 echo -e "\033[1;36m All specified programs are now installed \033[0m"
 
